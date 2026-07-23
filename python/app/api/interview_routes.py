@@ -915,7 +915,8 @@ async def serve_dashboard():
         function fdt(iso){ 
             if(!iso) return 'N/A'; 
             try{ 
-                const d = new Date(iso);
+                const isoZ = (typeof iso === 'string' && !iso.endsWith('Z') && !iso.includes('+') && iso.includes('T')) ? iso + 'Z' : iso;
+                const d = new Date(isoZ);
                 const yr = d.getFullYear();
                 const mo = String(d.getMonth()+1).padStart(2,'0');
                 const dy = String(d.getDate()).padStart(2,'0');
@@ -1250,7 +1251,24 @@ async def serve_proctoring_report(email: str):
     name     = candidate.get("candidate_name", "Candidate")
     position = candidate.get("job_description_text", "")[:40] if candidate.get("job_description_text") else "Role"
     initials = "".join(p[0].upper() for p in name.split()[:2])
-    interview_date = candidate.get("start_time", "")[:10] if candidate.get("start_time") else "N/A"
+    
+    def format_ist_datetime(iso_str):
+        if not iso_str:
+            return "N/A"
+        try:
+            s = str(iso_str).replace("Z", "")
+            if "T" in s:
+                dt = datetime.fromisoformat(s.split("+")[0])
+            else:
+                dt = datetime.strptime(s[:19], "%Y-%m-%d %H:%M:%S")
+            ist_dt = dt + timedelta(hours=5, minutes=30)
+            return ist_dt.strftime("%Y-%m-%d %I:%M %p")
+        except Exception:
+            return str(iso_str)[:16]
+
+    raw_start = candidate.get("start_time") or candidate.get("created_at")
+    interview_date = format_ist_datetime(raw_start)
+
     interview_time = candidate.get("start_time", "")
     duration_s = proctor.get("total_sampled_seconds", 0)
     duration_str = f"{duration_s // 60}m {duration_s % 60}s" if duration_s else "N/A"
@@ -1258,7 +1276,9 @@ async def serve_proctoring_report(email: str):
     if candidate.get("recording_local_path"):
         vfn = os.path.basename(candidate["recording_local_path"])
         video_url = f"/static/recordings/{vfn}"
-    report_id = f"ATS-{interview_date.replace('-', '')}001"
+    
+    report_date_clean = interview_date[:10].replace('-', '')
+    report_id = f"ATS-{report_date_clean}001"
 
     # ── Interview Statistics ──
     total_questions   = len(candidate.get("questions", []))
