@@ -1,0 +1,20 @@
+{
+  "name": "teams-bot",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js", 
+    "end": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "AI Interview Bot Teams + Azure Speech TTS",
+  "dependencies": {
+    "axios": "^1.13.5",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1", 
+    "microsoft-cognitiveservices-speech-sdk": "^1.36.0"
+  }
+}
