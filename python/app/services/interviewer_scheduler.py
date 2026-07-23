@@ -251,6 +251,6 @@ def schedule_interview(
         "event_id": event_id, 
         "eventId": event_id, 
         "candidate_email": candidate_email,
-        "start_time": start_time.isoformat(),
-        "end_time": end_time.isoformat()
+        "start_time": start_time.isoformat() + "Z",
+        "end_time": end_time.isoformat() + "Z"
     }
