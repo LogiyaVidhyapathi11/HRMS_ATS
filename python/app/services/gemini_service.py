@@ -3,6 +3,7 @@ import asyncio
 import requests
 import os
 import re
+from datetime import datetime, timezone, timedelta
 # import google.generativeai as genai
 from google import genai 
 from google.genai import types
@@ -111,8 +112,21 @@ async def generate_interview_questions(resume_text: str, jd_text: str) -> Gemini
                 })
 
         # Prepend Introductory question as Question 0 (total = 1 Intro + 3 Technical)
+
+        ist_now = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+        ist_hour = ist_now.hour
+        if ist_hour < 12:
+            time_greeting = "Good Morning"
+        elif ist_hour < 17:
+            time_greeting = "Good Afternoon"
+        else:
+            time_greeting = "Good Evening"
+
+        name_to_use = candidate_name.strip() if (candidate_name and isinstance(candidate_name, str) and candidate_name.strip() and candidate_name.lower() not in ["candidate", "unknown"]) else ""
+        name_greeting = f" {name_to_use}" if name_to_use else ""
+
         intro_q = {
-            "text": "Hello, Welcome to your interview. To start with, please introduce yourself.",
+            "text": f"Hello{name_greeting}, {time_greeting}. Welcome to your interview. To start with, please introduce yourself.",
             "type": "Introductory"
         }
         formatted_questions.insert(0, intro_q)
