@@ -95,21 +95,34 @@ async def recording_ready(data: RecordingReadyRequest):
         print(f"[Backend] AI Scorecard generated successfully.")
 
         # 3. Update MongoDB with the proctoring results and the feedback report
-        await candidates_collection.update_one(
-            {"candidate_email": data.candidate_email}, 
-            {
-                "$set": { 
-                    "status": "completed", 
-                    "recording_local_path": local_path, 
-                    "recording_content_url": data.content_url, 
-                    "proctoring_analysis": proctoring_results, 
-                    "ats_scorecard": scorecard.dict(), 
-                    "ai_feedback_report": scorecard.detailed_feedback, # for backward compatibility
-                    "questions": data.questions,  # Store actual questions asked (including intro greeting), 
-                    "updated_at": datetime.utcnow()
-                }
-            }
+        # Find the specific scheduled record (or latest created) for this candidate email
+        target_doc = await candidates_collection.find_one(
+            {"candidate_email": data.candidate_email, "status": "scheduled"},
+            sort=[("created_at", -1), ("start_time", -1)]
         )
+
+        if not target_doc:
+            target_doc = await candidates_collection.find_one(
+                {"candidate_email": data.candidate_email},
+                sort=[("created_at", -1), ("start_time", -1)]
+            )
+
+        if target_doc:
+            await candidates_collection.update_one(
+                {"_id": target_doc["_id"]}, 
+                {
+                    "$set": { 
+                        "status": "completed", 
+                        "recording_local_path": local_path, 
+                        "recording_content_url": data.content_url, 
+                        "proctoring_analysis": proctoring_results, 
+                        "ats_scorecard": scorecard.dict(), 
+                        "ai_feedback_report": scorecard.detailed_feedback, # for backward compatibility
+                        "questions": data.questions,  # Store actual questions asked (including intro greeting)
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
 
         print(f"[Backend] MongoDB updated with AI report for {data.candidate_name}")
 
@@ -364,13 +377,226 @@ async def get_candidates():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def get_sidebar_css():
+    return """
+    /* ── SIDEBAR MOCKUP STYLING ── */
+    .sidebar {
+        width: 240px;
+        height: 100vh;
+        background: #0B132B;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 100;
+        padding: 16px 12px;
+        overflow-y: auto;
+        box-sizing: border-box;
+    }
+    .sb-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 8px 16px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 16px;
+    }
+    .sb-brand-wrap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .sb-logo-box {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #6366F1, #4F46E5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #FFFFFF;
+        font-weight: 800;
+        font-size: 0.85rem;
+        font-family: 'Outfit', sans-serif;
+    }
+    .sb-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #F8FAFC;
+        line-height: 1.2;
+    }
+    .sb-sub {
+        font-size: 0.7rem;
+        color: #64748B;
+        font-weight: 500;
+    }
+    .sb-chevron {
+        color: #64748B;
+    }
+
+    .sb-menu {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+    }
+    .sb-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        color: #94A3B8;
+    }
+    .sb-nav-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #F8FAFC;
+    }
+    .sb-nav-item.active {
+       background: linear-gradient(135deg, #4F46E5, #3B82F6) !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4) !important;
+    }
+
+    .sb-section-label {
+        padding: 12px 12px 6px 12px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: #64748B;
+        text-transform: uppercase;
+    }
+
+    .sb-user {
+        margin-top: auto;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .sb-user-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .sb-avatar-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .sb-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #8B5CF6;
+        color: #FFFFFF;
+        font-weight: 700;
+        font-size: 0.78rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .sb-status-dot {
+        position: absolute;
+        bottom: 0px;
+        right: 0px;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #10B981;
+        border: 2px solid #0B132B;
+    }
+
+    .sb-user-name {
+        color: #F8FAFC;
+        font-size: 0.78rem;
+        font-weight: 600;
+        line-height: 1.2;
+    }
+    .sb-user-role {
+        color: #64748B;
+        font-size: 0.68rem;
+    }
+    """
+
+def render_sidebar(active_tab: str = "dashboard", report_link: str = "/api/dashboard"):
+    dash_active = "active" if active_tab == "dashboard" else ""
+    report_active = "active" if active_tab == "reports" else ""
+
+    return f"""
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <!-- Header -->
+  <div class="sb-header">
+    <div class="sb-brand-wrap">
+      <div class="sb-logo-box">AB</div>
+      <div>
+        <div class="sb-title">Adams Bridge AI</div>
+        <div class="sb-sub">HRMS Integration</div>
+      </div>
+    </div>
+    <svg class="sb-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+  </div>
+
+  <!-- Navigation Links -->
+  <div class="sb-menu">
+    <div class="sb-section-label">MAIN</div>
+    <a href="/api/dashboard" class="sb-nav-item {dash_active}">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Dashboard</span>
+    </a>
+
+    <a href="{report_link}" class="sb-nav-item {report_active}">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>Reports</span>
+    </a>
+  </div>
+
+  <!-- Footer User Profile -->
+  <div class="sb-user">
+    <div class="sb-user-left">
+      <div class="sb-avatar-wrap">
+        <div class="sb-avatar">LV</div>
+        <div class="sb-status-dot"></div>
+      </div>
+      <div>
+        <div class="sb-user-name">Logiya Vidhyapathi</div>
+        <div class="sb-user-role">AI Engineer</div>
+      </div>
+    </div>
+    <svg class="sb-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+  </div>
+</div>
+"""
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def serve_dashboard():
     """
     Serves the HR candidate management dashboard matching the mockup UI exactly.
     Light-theme, full-width layout with stat cards, sparklines, and search/filter candidate table.
     """
-    html_content = """
+    first_candidate = await candidates_collection.find_one({"status": "completed"})
+    if not first_candidate:
+        first_candidate = await candidates_collection.find_one({})
+    
+    report_link = f"/api/report/{first_candidate['candidate_email']}" if first_candidate and first_candidate.get("candidate_email") else "/api/dashboard"
+    sidebar_css = get_sidebar_css()
+    sidebar_html = render_sidebar("dashboard", report_link)
+
+    html_template = """
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -391,70 +617,175 @@ async def serve_dashboard():
                 --danger: #EF4444;
             }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text); min-height: 100vh; padding: 2.5rem 5rem; }
 
-            .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-
-            /* ── HEADER ──────────────────────────────── */
-            header {
-                display: flex; justify-content: space-between; align-items: center;
-                padding-bottom: 20px; border-bottom: 1px solid var(--border);
-                margin-bottom: 8px;
-            }
-            .header-left { display: flex; align-items: center; gap: 12px; }
-            .logo-icon {
-                width: 42px; height: 42px; border-radius: 12px;
-                background: #4F46E5;
-                display: flex; align-items: center; justify-content: center;
-                font-weight: 800; font-size: 1.15rem; color: #fff;
-                font-family: 'Outfit', sans-serif; flex-shrink: 0;
-            }
-            .header-titles h1 { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.6rem; color: #1E293B; }
-            .header-titles p { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; margin-top: 2px; }
-
-            .header-right { display: flex; align-items: center; gap: 20px; }
-            .bell-btn { background: none; border: none; cursor: pointer; position: relative; font-size: 1.35rem; color: #64748B; display: flex; align-items: center; }
-            .bell-dot { position: absolute; top: 1px; right: 1px; width: 6px; height: 6px; background: #EF4444; border-radius: 50%; }
+            body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text); min-height: 100vh; display: flex; margin: 0; padding: 0; }
             
-            .user-profile { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-            .user-avatar {
-                width: 38px; height: 38px; border-radius: 50%;
-                background: #EEF2FF; border: 1px solid #C7D2FE;
-                display: flex; align-items: center; justify-content: center;
-                font-weight: 700; font-size: 0.9rem; color: #4F46E5;
-            }
-            .user-info { display: flex; flex-direction: column; }
-            .user-name { font-size: 0.82rem; font-weight: 600; color: #1E293B; }
-            .user-role { font-size: 0.72rem; color: var(--text-muted); }
-            .chevron-icon { font-size: 0.65rem; color: var(--text-muted); margin-left: 2px; }
+            /* SIDEBAR_CSS_PLACEHOLDER */
 
-            /* ── STATS CARDS ──────────────────────────── */
+            .main-content {
+                flex: 1;
+                margin-left: 240px;
+                min-height: 100vh;
+                padding: 1.5rem 2rem;
+                background: var(--bg-main);
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+            }
+            .container {
+                width: 100%;
+                max-width: 100%;
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+                flex: 1;
+            }
+
+            /* ── TOP NAV BAR (IMAGE 2 MATCH) ── */
+            .top-nav {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding-bottom: 8px;
+            }
+            .top-nav-left {
+                display: flex;
+                align-items: center;
+                gap: 14px;
+            }
+            .hamburger-btn {
+                background: none;
+                border: none;
+                cursor: pointer;
+                color: #334155;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 4px;
+                border-radius: 6px;
+                transition: background 0.15s;
+            }
+            .hamburger-btn:hover {
+                background: #F1F5F9;
+            }
+            .header-titles {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+            .page-title {
+                font-family: 'Outfit', sans-serif;
+                font-size: 1.35rem;
+                font-weight: 700;
+                color: #0F172A;
+                line-height: 1.2;
+            }
+            .page-sub {
+                font-size: 0.78rem;
+                color: #64748B;
+                font-weight: 500;
+            }
+            
+            .top-nav-right {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+            }
+            .top-bell-btn {
+                position: relative;
+                width: 38px;
+                height: 38px;
+                border-radius: 50%;
+                background: #FFFFFF;
+                border: 1px solid #E2E8F0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #475569;
+                cursor: pointer;
+                transition: all 0.15s;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            }
+            .top-bell-btn:hover {
+                background: #F8FAFC;
+                color: #1E293B;
+            }
+            .top-bell-badge {
+                position: absolute;
+                top: 1px;
+                right: 1px;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background: #4F46E5;
+                color: #FFFFFF;
+                font-size: 0.65rem;
+                font-weight: 700;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: 2px solid #FFFFFF;
+            }
+
+            .top-user-avatar {
+                width: 38px;
+                height: 38px;
+                border-radius: 50%;
+                background: #EEF2FF;
+                border: 1px solid #C7D2FE;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 700;
+                font-size: 0.85rem;
+                color: #4F46E5;
+            }
+
+            /* ── STATS CARDS (IMAGE 2 MATCH) ──────────────────────────── */
             .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
             .stat-card {
                 background: var(--bg-card); border: 1px solid var(--border);
-                border-radius: 16px; padding: 24px;
-                display: flex; flex-direction: column; gap: 16px;
+                border-radius: 16px; padding: 20px;
+                display: flex; flex-direction: column; gap: 14px;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+                position: relative;
             }
-            .stat-top-row { display: flex; align-items: center; gap: 16px; }
+            .stat-top-row { display: flex; align-items: flex-start; gap: 14px; }
             .stat-icon-box {
-                width: 48px; height: 48px; border-radius: 12px;
+                width: 44px; height: 44px; border-radius: 12px;
                 display: flex; align-items: center; justify-content: center;
+                flex-shrink: 0;
             }
             .stat-icon-box.purple { background: #EEF2FF; color: #4F46E5; }
             .stat-icon-box.green { background: #E6FDF4; color: #10B981; }
             .stat-icon-box.orange { background: #FFF7ED; color: #F97316; }
             .stat-icon-box.blue { background: #EFF6FF; color: #3B82F6; }
 
-            .stat-title-val { display: flex; flex-direction: column; gap: 2px; }
-            .stat-label { font-size: 0.82rem; color: #4B5563; font-weight: 500; }
-            .stat-value { font-size: 1.8rem; font-weight: 800; font-family: 'Outfit', sans-serif; color: #111827; line-height: 1.1; }
+            .stat-title-val { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+            .stat-card-top-header { display: flex; align-items: center; justify-content: space-between; }
+            .stat-label { font-size: 0.8rem; color: #4B5563; font-weight: 500; }
+            .three-dots-btn { background: none; border: none; color: #94A3B8; font-size: 1.15rem; cursor: pointer; padding: 0 2px; line-height: 1; border-radius: 4px; }
+            .three-dots-btn:hover { color: #475569; }
+            .stat-value { font-size: 1.75rem; font-weight: 800; font-family: 'Outfit', sans-serif; color: #0F172A; line-height: 1.1; }
             
-            .stat-bottom-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; }
-            .stat-subtext { font-size: 0.72rem; color: #9CA3AF; font-weight: 500; padding-bottom: 2px; }
+            .stat-bottom-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; padding-top: 4px; }
+            .stat-subtext { font-size: 0.72rem; color: #94A3B8; font-weight: 500; padding-bottom: 2px; }
             
-            .sparkline-container { width: 100px; height: 32px; }
+            .sparkline-container { width: 95px; height: 30px; }
             .sparkline-svg { width: 100%; height: 100%; overflow: visible; }
+
+            /* ── DASHBOARD FOOTER ── */
+            .dashboard-footer {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding-top: 24px;
+                margin-top: auto;
+                font-size: 0.78rem;
+                color: #94A3B8;
+                font-weight: 500;
+            }
 
             /* ── TABLE CARD ──────────────────────────── */
             .tcard {
@@ -687,144 +1018,106 @@ async def serve_dashboard():
     </head>
     <body>
 
-    <div class="container">
-        <!-- HEADER -->
-        <header>
-            <div class="header-left">
-                <div class="logo-icon">AB</div>
-                <div class="header-titles">
-                    <h1>Candidate Evaluation Dashboard</h1>
-                    <p>Adams Bridge AI HRMS Integration</p>
+    <!-- SIDEBAR_PLACEHOLDER -->
+
+    <div class="main-content">
+        <div class="container">
+        <!-- TOP NAV BAR -->
+            <div class="top-nav">
+                <div class="top-nav-left">
+                    <div class="header-titles">
+                        <h1 class="page-title">Candidate Evaluation Dashboard</h1>
+                        <p class="page-sub">Adams Bridge AI HRMS Integration</p>
+                    </div>
                 </div>
             </div>
-            <!-- <div class="header-right">
-                <button class="bell-btn">
-                    🔔<span class="bell-dot"></span>
-                </button>
-                <div class="user-profile">
-                    <div class="user-avatar">AB</div>
-                    <div class="user-info">
-                        <span class="user-name">Admin User</span>
-                        <span class="user-role">HR Manager</span>
-                    </div>
-                    <span class="chevron-icon">▼</span>
-                </div>
-            </div> -->
-        </header>
 
         <!-- STATS CARDS -->
         <div class="stats-grid">
             <!-- Card 1: Total Candidates -->
-            <div class="stat-card">
-                <div class="stat-top-row">
-                    <div class="stat-icon-box purple">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    </div>
-                    <div class="stat-title-val">
-                        <span class="stat-label">Total Candidates</span>
-                        <span class="stat-value" id="stat-total">0</span>
-                    </div>
-                </div>
-                <div class="stat-bottom-row">
-                    <span class="stat-subtext">All time</span>
-                    <div class="sparkline-container">
-                        <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
-                            <defs>
-                                <linearGradient id="purple-grad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stop-color="#7C3AED" stop-opacity="0.2"/>
-                                    <stop offset="100%" stop-color="#7C3AED" stop-opacity="0"/>
-                                </linearGradient>
-                            </defs>
-                            <path d="M0,25 Q15,22 30,12 T60,18 T90,8 T100,5" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M0,25 Q15,22 30,12 T60,18 T90,8 T100,5 L100,30 L0,30 Z" fill="url(#purple-grad)"/>
-                        </svg>
-                    </div>
-                </div>
+          <div class="stat-card">
+            <div class="stat-top-row">
+              <div class="stat-icon-box purple">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div class="stat-title-val">
+                <span class="stat-label">Total Candidates</span>
+                <span class="stat-value" id="stat-total">0</span>
+              </div> 
             </div>
 
-            <!-- Card 2: Completed Interviews -->
-            <div class="stat-card">
-                <div class="stat-top-row">
-                    <div class="stat-icon-box green">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
-                    </div>
-                    <div class="stat-title-val">
-                        <span class="stat-label">Completed Interviews</span>
-                        <span class="stat-value" id="stat-completed">0</span>
-                    </div>
-                </div>
-                <div class="stat-bottom-row">
-                    <span class="stat-subtext">This month</span>
-                    <div class="sparkline-container">
-                        <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
-                            <defs>
-                                <linearGradient id="green-grad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stop-color="#10B981" stop-opacity="0.2"/>
-                                    <stop offset="100%" stop-color="#10B981" stop-opacity="0"/>
-                                </linearGradient>
-                            </defs>
-                            <path d="M0,28 Q20,18 40,24 T80,10 T100,12" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M0,28 Q20,18 40,24 T80,10 T100,12 L100,30 L0,30 Z" fill="url(#green-grad)"/>
-                        </svg>
-                    </div>
-                </div>
+            <div class="stat-bottom-row">
+              <span class="stat-subtext">All time</span>
+              <div class="sparkline-container">
+                <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
+                  <path d="M0,25 Q15,22 30,12 T60,18 T90,8 T100,5" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+              </div>
             </div>
+          </div>
 
-            <!-- Card 3: Scheduled Interviews -->
-            <div class="stat-card">
-                <div class="stat-top-row">
-                    <div class="stat-icon-box orange">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
-                    </div>
-                    <div class="stat-title-val">
-                        <span class="stat-label">Scheduled Interviews</span>
-                        <span class="stat-value" id="stat-scheduled">0</span>
-                    </div>
-                </div>
-                <div class="stat-bottom-row">
-                    <span class="stat-subtext">Upcoming</span>
-                    <div class="sparkline-container">
-                        <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
-                            <defs>
-                                <linearGradient id="orange-grad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stop-color="#F97316" stop-opacity="0.2"/>
-                                    <stop offset="100%" stop-color="#F97316" stop-opacity="0"/>
-                                </linearGradient>
-                            </defs>
-                            <path d="M0,26 Q15,22 30,26 T60,18 T90,24 T100,10" fill="none" stroke="#F97316" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M0,26 Q15,22 30,26 T60,18 T90,24 T100,10 L100,30 L0,30 Z" fill="url(#orange-grad)"/>
-                        </svg>
-                    </div>
-                </div>
+        <!-- Card 2: Completed Interviews -->
+          <div class="stat-card">
+            <div class="stat-top-row">
+              <div class="stat-icon-box green">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
+              <div class="stat-title-val">
+                <span class="stat-label">Completed Interviews</span>
+                <span class="stat-value" id="stat-completed">0</span>
+              </div>
             </div>
+            <div class="stat-bottom-row">
+              <span class="stat-subtext">This month</span>
+              <div class="sparkline-container">
+                <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
+                  <path d="M0,28 Q20,18 40,24 T80,10 T100,12" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+           <!-- Card 3: Scheduled Interviews -->
+          <div class="stat-card">
+            <div class="stat-top-row">
+              <div class="stat-icon-box orange">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+              </div>
+              <div class="stat-title-val">
+                <span class="stat-label">Scheduled Interviews</span>
+                <span class="stat-value" id="stat-scheduled">0</span>
+              </div>
+            </div>
+            <div class="stat-bottom-row">
+              <span class="stat-subtext">Upcoming</span>
+              <div class="sparkline-container">
+                <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
+                  <path d="M0,26 Q25,26 40,16 T80,8 T100,10" fill="none" stroke="#F97316" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+              </div>
+            </div>
+          </div>
 
             <!-- Card 4: Average ATS Match Score -->
-            <div class="stat-card">
-                <div class="stat-top-row">
-                    <div class="stat-icon-box blue">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                    </div>
-                    <div class="stat-title-val">
-                        <span class="stat-label">Average ATS Match Score</span>
-                        <span class="stat-value" id="stat-avg">0%</span>
-                    </div>
-                </div>
-                <div class="stat-bottom-row">
-                    <span class="stat-subtext">Across all candidates</span>
-                    <div class="sparkline-container">
-                        <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
-                            <defs>
-                                <linearGradient id="blue-grad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.2"/>
-                                    <stop offset="100%" stop-color="#3B82F6" stop-opacity="0"/>
-                                </linearGradient>
-                            </defs>
-                            <path d="M0,22 Q30,12 60,25 T100,8" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M0,22 Q30,12 60,25 T100,8 L100,30 L0,30 Z" fill="url(#blue-grad)"/>
-                        </svg>
-                    </div>
-                </div>
+          <div class="stat-card">
+            <div class="stat-top-row">
+              <div class="stat-icon-box blue">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+              </div>
+              <div class="stat-title-val">
+                <span class="stat-label">Average ATS Match Score</span>
+                <span class="stat-value" id="stat-avg">0%</span>
+              </div>
             </div>
+            <div class="stat-bottom-row">
+              <span class="stat-subtext">Across all candidates</span>
+              <div class="sparkline-container">
+                <svg class="sparkline-svg" viewBox="0 0 100 30" preserveAspectRatio="none">
+                 <path d="M0,22 Q20,24 40,18 T80,24 T100,8" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- TABLE CARD -->
@@ -959,7 +1252,7 @@ async def serve_dashboard():
                     ats=`<span class="badge-score ${sc>=75?'score-high':sc>=50?'score-medium':'score-low'}">${sc}%</span>`;
                     const chv=c.proctoring_analysis?.cheating_score??0;
                     ch=`<span class="badge-score ${chv>=50?'score-low':chv>=20?'score-medium':'score-high'}">${chv}%</span>`;
-                    act=`<a href="/api/report/${encodeURIComponent(c.candidate_email)}" class="btn-action-view"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>View Scorecard</a>`;
+                    act=`<a href="/api/report/${c._id || encodeURIComponent(c.candidate_email)}" class="btn-action-view"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>View Scorecard</a>`;
                 }
                 
                 tb.innerHTML+=`
@@ -1181,10 +1474,18 @@ async def serve_dashboard():
         
         window.onload=load;
     </script>
+     <!-- DASHBOARD FOOTER BANNER -->
+        <div class="dashboard-footer">
+          <div>© 2026 Adams Bridge AI HRMS. All rights reserved.</div>
+          <div>Version 1.0.0</div>
+        </div>
+      </div>
+    </div> <!-- .main-content -->
     </body>
     </html>
     """
-    return HTMLResponse(content=html_content)
+    final_html = html_template.replace("/* SIDEBAR_CSS_PLACEHOLDER */", sidebar_css).replace("<!-- SIDEBAR_PLACEHOLDER -->", sidebar_html)
+    return HTMLResponse(content=final_html)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AI INTERVIEW PROCTORING REPORT  ·  GET /api/report/{email}
@@ -1192,20 +1493,23 @@ async def serve_dashboard():
 
 @router.get("/report/{email:path}")
 async def serve_proctoring_report(email: str):
-    """
-    Full-page AI Interview Proctoring Report for HR review.
-    Renders the premium dark-mode dashboard with:
-      - 6 KPI cards (ATS, Integrity, Risk, AI Confidence, Recommendation, Cheating)
-      - AI Proctoring Summary table
-      - Integrity Score gauge + Integrity Factors bar chart
-      - Integrity Timeline with evidence screenshots
-      - Candidate Performance (skill bars + radar chart)
-      - Evidence Snapshots carousel
-      - Recruiter Summary (strengths / concerns)
-      - AI Recommendation card
-      - Download PDF button
-    """
-    candidate = await candidates_collection.find_one({"candidate_email": email})
+    candidate = None
+
+    # 1. Try lookup by 24-char hex ObjectId
+    if len(email) == 24:
+        try:
+            from bson import ObjectId
+            candidate = await candidates_collection.find_one({"_id": ObjectId(email)})
+        except Exception:
+            pass
+
+    # 2. Fallback lookup by email (take the latest completed/created record)
+    if not candidate:
+        candidate = await candidates_collection.find_one(
+            {"candidate_email": email},
+            sort=[("created_at", -1), ("start_time", -1)]
+        )
+
     if not candidate:
         return HTMLResponse(content="<h2 style='color:white;font-family:sans-serif;padding:2rem'>Candidate not found.</h2>", status_code=404)
 
@@ -1279,6 +1583,9 @@ async def serve_proctoring_report(email: str):
     
     report_date_clean = interview_date[:10].replace('-', '')
     report_id = f"ATS-{report_date_clean}001"
+
+    report_sidebar_css = get_sidebar_css()
+    report_sidebar_html = render_sidebar("reports", f"/api/report/{email}")
 
     # ── Interview Statistics ──
     total_questions   = len(candidate.get("questions", []))
@@ -1491,7 +1798,7 @@ async def serve_proctoring_report(email: str):
         for pt in rec_reasons:
             rec_reasons_html += f"""
             <div style="display:flex;align-items:start;gap:8px;font-size:0.74rem;color:#1E293B;line-height:1.4">
-                <span style="color:#2563EB;font-size:0.9rem;line-height:1;margin-top:0px">•</span>
+                <span style="color:#2563EB;font-size:0.9rem;line-height:1;margin-top:0px">&bull;</span>
                 <span>{pt}</span>
             </div>"""
     else:
@@ -1503,11 +1810,11 @@ async def serve_proctoring_report(email: str):
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Proctoring Report — {name}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Interview Proctoring Report — {name}</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root {{
     --bg-main:   #F5F7FA;
@@ -1527,21 +1834,10 @@ async def serve_proctoring_report(email: str):
   * {{ margin:0; padding:0; box-sizing:border-box; }}
   body {{ font-family:'Inter',sans-serif; background:var(--bg-main); color:var(--text); min-height:100vh; display:flex; }}
   
-  /* SIDEBAR */
-  .sidebar {{ width:200px; min-height:100vh; background:#1E293B; border-right:1px solid #334155; display:flex; flex-direction:column; flex-shrink:0; position:fixed; top:0; left:0; z-index:10; }}
-  .sidebar-logo {{ padding:18px 16px; border-bottom:1px solid #334155; display:flex;align-items:center;gap:8px; }}
-  .sidebar-logo .logo-icon {{ width:28px;height:28px;background:linear-gradient(135deg,#2563EB,#4F46E5);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:white; }}
-  .sidebar-logo span {{ font-size:0.85rem;font-weight:700;color:#F8FAFC; }}
-  .sidebar-nav {{ padding:8px 0; flex:1; }}
-  .sidebar-nav a {{ text-decoration:none;color:inherit;outline:none; }}
-  .nav-item {{ display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:0.8rem;color:#94A3B8;cursor:pointer;transition:all 0.2s; }}
-  .nav-item:hover {{ background:rgba(99,102,241,0.12);color:#F8FAFC; }}
-  .nav-item.active {{ background:rgba(37,99,235,0.18);color:#93C5FD;border-right:2px solid #2563EB; }}
-  .sidebar-footer {{ padding:12px 16px;border-top:1px solid #334155;font-size:0.7rem;color:#64748B; }}
-  .sidebar-footer .ai-badge {{ display:flex;align-items:center;gap:6px;margin-top:4px; }}
+  {report_sidebar_css}
   
   /* MAIN */
-  .main {{ margin-left:200px; flex:1; display:flex; flex-direction:column; min-height:100vh; }}
+  .main {{ margin-left:240px; flex:1; display:flex; flex-direction:column; min-height:100vh; }}
   
   /* TOP BAR */
   .topbar {{ background:#FFFFFF; border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; position:sticky;top:0;z-index:9;box-shadow:0 1px 4px rgba(0,0,0,0.06); }}
@@ -1885,28 +2181,7 @@ async def serve_proctoring_report(email: str):
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<div class="sidebar">
-  <div class="sidebar-logo">
-    <div class="logo-icon">AI</div>
-    <span>AI ATS</span>
-  </div>
-  <nav class="sidebar-nav">
-    <a href="/api/dashboard">
-        <div class="nav-item">🏠 Dashboard</div>
-    </a>
-    <div class="nav-item active">📁 Reports</div>
-  </nav>
-  <div class="sidebar-footer">
-    <div>Report ID</div>
-    <div style="color:var(--white);font-weight:600;font-size:0.72rem">{report_id}</div>
-    <div style="margin-top:6px">Generated On</div>
-    <div style="color:var(--white);font-weight:600;font-size:0.72rem">{interview_date}</div>
-    <div class="ai-badge" style="margin-top:8px">
-      <span style="color:#a78bfa;font-size:0.65rem">✦ Gemini 2.5 Flash</span>
-    </div>
-  </div>
-</div>
+{report_sidebar_html}
 
 <!-- MAIN -->
 <div class="main">
